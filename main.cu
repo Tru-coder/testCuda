@@ -47,8 +47,7 @@ int main() {
     }
 
     // Пареллельное сложения на GPU
-    for (int j = 0; j < 6; ++j){
-        int BLOCK_SIZE = BLOCK_DIM[j];
+    for (int BLOCK_SIZE : BLOCK_DIM){
         int BLOCK_NUMBER = (ARRAY_SIZE + BLOCK_SIZE - 1) / BLOCK_SIZE;
         HANDLE_ERROR(addWithCuda(c, a, b,  BLOCK_NUMBER, BLOCK_SIZE));
         for (int i = 0; i < 3; ++i){
