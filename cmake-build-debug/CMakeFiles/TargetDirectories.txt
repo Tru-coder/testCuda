@@ -1,0 +1,3 @@
+C:/Users/user/CLionProjects/testCuda/cmake-build-debug/CMakeFiles/testCuda.dir
+C:/Users/user/CLionProjects/testCuda/cmake-build-debug/CMakeFiles/edit_cache.dir
+C:/Users/user/CLionProjects/testCuda/cmake-build-debug/CMakeFiles/rebuild_cache.dir
