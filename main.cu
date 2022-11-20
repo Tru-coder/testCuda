@@ -11,12 +11,8 @@ static void HandleError( cudaError_t err,
 #define HANDLE_ERROR( err ) (HandleError( err, __FILE__, __LINE__ ))
 
 void cudaCheckAndPrintProperties();
-cudaError_t addWithCuda(double* c, const double* a, const double* b, unsigned int size, const int BLOCKS, const int THREADS_PER_BLOCK);
+cudaError_t addWithCuda(double* c, const double* a, const double* b, const int BLOCKS, const int THREADS_PER_BLOCK);
 void printTest();
-
-__global__ void add(int a, int b, int* c) {
-    *c = a + b;
-}
 double fRand(double fMin, double fMax);
 
 const extern int ARRAY_SIZE = 6000000;
@@ -42,17 +38,13 @@ int main() {
 
     srand(time(nullptr));
     // инициализация
-
-    for (int i = 0; i < ARRAY_SIZE; ++i)
-    {
+    for (int i = 0; i < ARRAY_SIZE; ++i){
         a[i] = fRand(0, 10);
         b[i] = fRand(10, 20);
     }
 
-
-
     // Пареллельное сложения на GPU
-    if (addWithCuda(c, a, b, ARRAY_SIZE, BLOCKS, THREADS_PER_BLOCK) != cudaSuccess) {
+    if (addWithCuda(c, a, b, BLOCKS, THREADS_PER_BLOCK) != cudaSuccess) {
         fprintf(stderr, "addWithCuda failed!");
         exit( EXIT_FAILURE );
     }
@@ -144,35 +136,24 @@ void cudaCheckAndPrintProperties(){
         cout << "Compute capability: " << prop.major << "." << prop.minor << endl;
     }
 
-    int result;
-    int* devResult;
-
-    HANDLE_ERROR(cudaMalloc((void**)&devResult, sizeof(int)));
-
-    add<<<1, 1>>>(7, 8, devResult);
-
-    HANDLE_ERROR(cudaMemcpy(&result, devResult, sizeof(int), cudaMemcpyDeviceToHost));
-
-    cout << "7 + 8 = " << result << endl;
-    cudaFree(devResult);
     cout << "------------------------------------------------------------------------------------------------\n";
 }
 
 
 //__global__ — выполняется на GPU, вызывается с CPU.
-__global__ void addKernel(double *c, const double *a, const double *b, const int size)
+__global__ void addKernel(double *c, const double *a, const double *b)
 {
     // Индекс обсчитываемых компонент вектора с учетом смещения от количества блоков
     int i = threadIdx.x + blockIdx.x * blockDim.x;
-    if (i < size)
+    if (i < ARRAY_SIZE)
         c[i] = a[i] + b[i];
 }
 
-cudaError_t addWithCuda(double* c, const double* a, const double* b, unsigned int size, const int BLOCKS, const int THREADS_PER_BLOCK)
+cudaError_t addWithCuda(double* c, const double* a, const double* b, const int BLOCKS, const int THREADS_PER_BLOCK)
 {
-    double* dev_a = 0;
-    double* dev_b = 0;
-    double* dev_c = 0;
+    double* dev_a = nullptr;
+    double* dev_b = nullptr;
+    double* dev_c = nullptr;
     double allTime = 0;
     cudaError_t cudaStatus;
 
@@ -200,32 +181,32 @@ cudaError_t addWithCuda(double* c, const double* a, const double* b, unsigned in
     }
 
     // Выделения памяти на GPU
-    cudaStatus = cudaMalloc(&dev_c, size * sizeof(double));
+    cudaStatus = cudaMalloc(&dev_c, ARRAY_SIZE * sizeof(double));
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMalloc failed!");
         goto Error;
     }
 
-    cudaStatus = cudaMalloc(&dev_a, size * sizeof(double));
+    cudaStatus = cudaMalloc(&dev_a, ARRAY_SIZE * sizeof(double));
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMalloc failed!");
         goto Error;
     }
 
-    cudaStatus = cudaMalloc(&dev_b, size * sizeof(double));
+    cudaStatus = cudaMalloc(&dev_b, ARRAY_SIZE * sizeof(double));
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMalloc failed!");
         goto Error;
     }
 
     // Копирования входных векторов с хоста на девайс
-    cudaStatus = cudaMemcpy(dev_a, a, size * sizeof(double), cudaMemcpyHostToDevice);
+    cudaStatus = cudaMemcpy(dev_a, a, ARRAY_SIZE * sizeof(double), cudaMemcpyHostToDevice);
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMemcpy failed!");
         goto Error;
     }
 
-    cudaStatus = cudaMemcpy(dev_b, b, size * sizeof(double), cudaMemcpyHostToDevice);
+    cudaStatus = cudaMemcpy(dev_b, b, ARRAY_SIZE * sizeof(double), cudaMemcpyHostToDevice);
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMemcpy failed!");
         goto Error;
@@ -241,7 +222,7 @@ cudaError_t addWithCuda(double* c, const double* a, const double* b, unsigned in
         }
 
         // Запуск функции ядра на GPU
-        addKernel <<< BLOCKS, THREADS_PER_BLOCK >>> (dev_c, dev_a, dev_b, size);
+        addKernel <<< BLOCKS, THREADS_PER_BLOCK >>> (dev_c, dev_a, dev_b);
 
         // Отлов ошибок запуска ядра
         cudaStatus = cudaGetLastError();
@@ -279,7 +260,7 @@ cudaError_t addWithCuda(double* c, const double* a, const double* b, unsigned in
     printf("\nAverage time: %.20f", allTime / 12);
 
     // Копирования выходного вектора с девайса на хост
-    cudaStatus = cudaMemcpy(c, dev_c, size * sizeof(double), cudaMemcpyDeviceToHost);
+    cudaStatus = cudaMemcpy(c, dev_c, ARRAY_SIZE * sizeof(double), cudaMemcpyDeviceToHost);
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMemcpy failed!");
         goto Error;

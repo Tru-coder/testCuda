@@ -59,3 +59,9 @@
 1	1905	6906604829779795	CMakeFiles/testCuda.dir/main.cu.obj	25aa0359769d6450
 1906	2638	6906604837149787	CMakeFiles/testCuda.dir/cmake_device_link.obj	bdbde00aae7e4c7d
 2638	2762	6906604838209783	testCuda.exe	10d935426e9ae935
+1	1930	6906605896934914	CMakeFiles/testCuda.dir/main.cu.obj	25aa0359769d6450
+1930	2575	6906605903434909	CMakeFiles/testCuda.dir/cmake_device_link.obj	bdbde00aae7e4c7d
+2575	2651	6906605904074904	testCuda.exe	10d935426e9ae935
+0	2019	6906606790326097	CMakeFiles/testCuda.dir/main.cu.obj	25aa0359769d6450
+2019	2662	6906606796816090	CMakeFiles/testCuda.dir/cmake_device_link.obj	bdbde00aae7e4c7d
+2662	2772	6906606797766086	testCuda.exe	10d935426e9ae935
