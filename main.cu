@@ -37,6 +37,8 @@ int main() {
     auto * c = (double *)calloc(ARRAY_SIZE, sizeof(double ));
 
 
+
+
     srand(time(nullptr));
     // инициализация
     for (int i = 0; i < ARRAY_SIZE; ++i){
@@ -45,15 +47,17 @@ int main() {
     }
 
     // Пареллельное сложения на GPU
-    for (int i = 0; i < 6; ++i){
-        HANDLE_ERROR(addWithCuda(c, a, b, GRID_DIM[i], BLOCK_DIM[i]));
+    for (int j = 0; j < 6; ++j){
+        int BLOCK_SIZE = BLOCK_DIM[j];
+        int BLOCK_NUMBER = (ARRAY_SIZE + BLOCK_SIZE - 1) / BLOCK_SIZE;
+        HANDLE_ERROR(addWithCuda(c, a, b,  BLOCK_NUMBER, BLOCK_SIZE));
         for (int i = 0; i < 3; ++i){
             printf("\n%d: %f + %f = %f", i, a[i], b[i], c[i]);
         }
         for (int i = ARRAY_SIZE - 3; i < ARRAY_SIZE; ++i){
             printf("\n%d: %f + %f = %f", i, a[i], b[i], c[i]);
         }
-
+        cout << "\n------------------------------------------------------------------------------------------------\n";
     }
 
     // cudaDeviceReset must be called before exiting in order for profiling and
@@ -88,21 +92,21 @@ void printTest(){
            "      T:::::::::T      E::::::::::::::::::::ES:::::::::::::::SS       T:::::::::T      \n"
            "      TTTTTTTTTTT      EEEEEEEEEEEEEEEEEEEEEE SSSSSSSSSSSSSSS         TTTTTTTTTTT      \n" << endl;
     cout <<
-            "     CCC::::::::::::CU::::::U     U::::::UD::::::::::::DDD                   A:::A                   \n"
-            "   CC:::::::::::::::CU::::::U     U::::::UD:::::::::::::::DD                A:::::A                  \n"
-            "  C:::::CCCCCCCC::::CUU:::::U     U:::::UUDDD:::::DDDDD:::::D              A:::::::A                 \n"
-            " C:::::C       CCCCCC U:::::U     U:::::U   D:::::D    D:::::D            A:::::::::A                \n"
-            "C:::::C               U:::::D     D:::::U   D:::::D     D:::::D          A:::::A:::::A               \n"
-            "C:::::C               U:::::D     D:::::U   D:::::D     D:::::D         A:::::A A:::::A              \n"
-            "C:::::C               U:::::D     D:::::U   D:::::D     D:::::D        A:::::A   A:::::A             \n"
-            "C:::::C               U:::::D     D:::::U   D:::::D     D:::::D       A:::::A     A:::::A            \n"
-            "C:::::C               U:::::D     D:::::U   D:::::D     D:::::D      A:::::AAAAAAAAA:::::A           \n"
-            "C:::::C               U:::::D     D:::::U   D:::::D     D:::::D     A:::::::::::::::::::::A          \n"
-            " C:::::C       CCCCCC U::::::U   U::::::U   D:::::D    D:::::D     A:::::AAAAAAAAAAAAA:::::A         \n"
-            "  C:::::CCCCCCCC::::C U:::::::UUU:::::::U DDD:::::DDDDD:::::D     A:::::A             A:::::A        \n"
-            "   CC:::::::::::::::C  UU:::::::::::::UU  D:::::::::::::::DD     A:::::A               A:::::A       \n"
-            "     CCC::::::::::::C    UU:::::::::UU    D::::::::::::DDD      A:::::A                 A:::::A      \n"
-            "        CCCCCCCCCCCCC      UUUUUUUUU      DDDDDDDDDDDDD        AAAAAAA                   AAAAAAA\n";
+         "     CCC::::::::::::CU::::::U     U::::::UD::::::::::::DDD                   A:::A                   \n"
+         "   CC:::::::::::::::CU::::::U     U::::::UD:::::::::::::::DD                A:::::A                  \n"
+         "  C:::::CCCCCCCC::::CUU:::::U     U:::::UUDDD:::::DDDDD:::::D              A:::::::A                 \n"
+         " C:::::C       CCCCCC U:::::U     U:::::U   D:::::D    D:::::D            A:::::::::A                \n"
+         "C:::::C               U:::::D     D:::::U   D:::::D     D:::::D          A:::::A:::::A               \n"
+         "C:::::C               U:::::D     D:::::U   D:::::D     D:::::D         A:::::A A:::::A              \n"
+         "C:::::C               U:::::D     D:::::U   D:::::D     D:::::D        A:::::A   A:::::A             \n"
+         "C:::::C               U:::::D     D:::::U   D:::::D     D:::::D       A:::::A     A:::::A            \n"
+         "C:::::C               U:::::D     D:::::U   D:::::D     D:::::D      A:::::AAAAAAAAA:::::A           \n"
+         "C:::::C               U:::::D     D:::::U   D:::::D     D:::::D     A:::::::::::::::::::::A          \n"
+         " C:::::C       CCCCCC U::::::U   U::::::U   D:::::D    D:::::D     A:::::AAAAAAAAAAAAA:::::A         \n"
+         "  C:::::CCCCCCCC::::C U:::::::UUU:::::::U DDD:::::DDDDD:::::D     A:::::A             A:::::A        \n"
+         "   CC:::::::::::::::C  UU:::::::::::::UU  D:::::::::::::::DD     A:::::A               A:::::A       \n"
+         "     CCC::::::::::::C    UU:::::::::UU    D::::::::::::DDD      A:::::A                 A:::::A      \n"
+         "        CCCCCCCCCCCCC      UUUUUUUUU      DDDDDDDDDDDDD        AAAAAAA                   AAAAAAA     \n";
 }
 
 void cudaCheckAndPrintProperties(){
@@ -123,12 +127,12 @@ void cudaCheckAndPrintProperties(){
         cout << "Max Threads per Block: " << prop.maxThreadsPerBlock << endl;
         cout << "Number of multiprocessors on device: " << prop.multiProcessorCount << endl;
         cout << "Maximum size of each dimension of a grid: " <<  prop.maxGridSize[0] << " | "
-                                                             <<  prop.maxGridSize[1] << " | "
-                                                             <<  prop.maxGridSize[2] << endl;
+             <<  prop.maxGridSize[1] << " | "
+             <<  prop.maxGridSize[2] << endl;
 
         cout << "Maximum size of each dimension of a block: " <<  prop.maxThreadsDim[0] << " | "
-                                                              <<  prop.maxThreadsDim[1] << " | "
-                                                              <<  prop.maxThreadsDim[2] << endl;
+             <<  prop.maxThreadsDim[1] << " | "
+             <<  prop.maxThreadsDim[2] << endl;
         cout << "Compute capability: " << prop.major << "." << prop.minor << endl;
     }
 
@@ -139,12 +143,12 @@ void cudaCheckAndPrintProperties(){
 //__global__ — выполняется на GPU, вызывается с CPU.
 __global__ void addKernel(double *c, const double *a, const double *b)
 {
-  /// Каждому потоку, выполняющему addKernel,
-  /// присваивается уникальный идентификатор блока
-  /// и идентификатор потока, который доступен в ядре через
-  /// встроенную переменную blockIdx.x и threadIdx,x.
-  /// Мы используем этот индекс, чтобы определить,
-  /// какие пары чисел мы хотим добавить в ядро.
+    /// Каждому потоку, выполняющему addKernel,
+    /// присваивается уникальный идентификатор блока
+    /// и идентификатор потока, который доступен в ядре через
+    /// встроенную переменную blockIdx.x и threadIdx,x.
+    /// Мы используем этот индекс, чтобы определить,
+    /// какие пары чисел мы хотим добавить в ядро.
 
     // blockIdx.x is the index of the block.
     // Each block has blockDim.x threads.
