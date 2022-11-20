@@ -11,12 +11,13 @@ static void HandleError( cudaError_t err,
 #define HANDLE_ERROR( err ) (HandleError( err, __FILE__, __LINE__ ))
 
 void cudaCheckAndPrintProperties();
-cudaError_t addWithCuda(int* c, const int* a, const int* b, unsigned int size, const int BLOCKS, const int THREADS_PER_BLOCK);
+cudaError_t addWithCuda(double* c, const double* a, const double* b, unsigned int size, const int BLOCKS, const int THREADS_PER_BLOCK);
 void printTest();
 
 __global__ void add(int a, int b, int* c) {
     *c = a + b;
 }
+double fRand(double fMin, double fMax);
 
 const extern int ARRAY_SIZE = 6000000;
 const extern int NORMAL_SPREAD = 12;
@@ -34,20 +35,18 @@ int main() {
     printf("\nAmount of BLOCKS: %d",  BLOCKS);
     printf("\nTHREADS_PER_BLOCK: %d",  THREADS_PER_BLOCK);
 
-    int * a = (int *)calloc(ARRAY_SIZE, sizeof(int ));
-    int * b = (int *)calloc(ARRAY_SIZE, sizeof(int ));
-    int * c = (int *)calloc(ARRAY_SIZE, sizeof(int ));
+    auto * a = (double *)calloc(ARRAY_SIZE, sizeof(double ));
+    auto * b = (double *)calloc(ARRAY_SIZE, sizeof(double ));
+    auto * c = (double *)calloc(ARRAY_SIZE, sizeof(double ));
 
 
     srand(time(nullptr));
     // инициализация
-    int * ptr = a;
-    while (ptr < a +ARRAY_SIZE){
-        *ptr++ = rand() % 10;
-    }
-    ptr = b;
-    while (ptr < b +ARRAY_SIZE){
-        *ptr++ = rand() % 10 + 13;
+
+    for (int i = 0; i < ARRAY_SIZE; ++i)
+    {
+        a[i] = fRand(0, 10);
+        b[i] = fRand(10, 20);
     }
 
 
@@ -60,10 +59,10 @@ int main() {
 
 
     for (int i = 0; i < 3; ++i){
-        printf("\n%d: %d + %d = %d", i, a[i], b[i], c[i]);
+        printf("\n%d: %f + %f = %f", i, a[i], b[i], c[i]);
     }
     for (int i = ARRAY_SIZE - 3; i < ARRAY_SIZE; ++i){
-        printf("\n%d: %d + %d = %d", i, a[i], b[i], c[i]);
+        printf("\n%d: %f + %f = %f", i, a[i], b[i], c[i]);
     }
 
     // cudaDeviceReset must be called before exiting in order for profiling and
@@ -161,7 +160,7 @@ void cudaCheckAndPrintProperties(){
 
 
 //__global__ — выполняется на GPU, вызывается с CPU.
-__global__ void addKernel(int *c, const int *a, const int *b, const int size)
+__global__ void addKernel(double *c, const double *a, const double *b, const int size)
 {
     // Индекс обсчитываемых компонент вектора с учетом смещения от количества блоков
     int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -169,11 +168,11 @@ __global__ void addKernel(int *c, const int *a, const int *b, const int size)
         c[i] = a[i] + b[i];
 }
 
-cudaError_t addWithCuda(int* c, const int* a, const int* b, unsigned int size, const int BLOCKS, const int THREADS_PER_BLOCK)
+cudaError_t addWithCuda(double* c, const double* a, const double* b, unsigned int size, const int BLOCKS, const int THREADS_PER_BLOCK)
 {
-    int* dev_a = 0;
-    int* dev_b = 0;
-    int* dev_c = 0;
+    double* dev_a = 0;
+    double* dev_b = 0;
+    double* dev_c = 0;
     double allTime = 0;
     cudaError_t cudaStatus;
 
@@ -201,32 +200,32 @@ cudaError_t addWithCuda(int* c, const int* a, const int* b, unsigned int size, c
     }
 
     // Выделения памяти на GPU
-    cudaStatus = cudaMalloc(&dev_c, size * sizeof(int));
+    cudaStatus = cudaMalloc(&dev_c, size * sizeof(double));
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMalloc failed!");
         goto Error;
     }
 
-    cudaStatus = cudaMalloc(&dev_a, size * sizeof(int));
+    cudaStatus = cudaMalloc(&dev_a, size * sizeof(double));
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMalloc failed!");
         goto Error;
     }
 
-    cudaStatus = cudaMalloc(&dev_b, size * sizeof(int));
+    cudaStatus = cudaMalloc(&dev_b, size * sizeof(double));
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMalloc failed!");
         goto Error;
     }
 
     // Копирования входных векторов с хоста на девайс
-    cudaStatus = cudaMemcpy(dev_a, a, size * sizeof(int), cudaMemcpyHostToDevice);
+    cudaStatus = cudaMemcpy(dev_a, a, size * sizeof(double), cudaMemcpyHostToDevice);
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMemcpy failed!");
         goto Error;
     }
 
-    cudaStatus = cudaMemcpy(dev_b, b, size * sizeof(int), cudaMemcpyHostToDevice);
+    cudaStatus = cudaMemcpy(dev_b, b, size * sizeof(double), cudaMemcpyHostToDevice);
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMemcpy failed!");
         goto Error;
@@ -280,7 +279,7 @@ cudaError_t addWithCuda(int* c, const int* a, const int* b, unsigned int size, c
     printf("\nAverage time: %.20f", allTime / 12);
 
     // Копирования выходного вектора с девайса на хост
-    cudaStatus = cudaMemcpy(c, dev_c, size * sizeof(int), cudaMemcpyDeviceToHost);
+    cudaStatus = cudaMemcpy(c, dev_c, size * sizeof(double), cudaMemcpyDeviceToHost);
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMemcpy failed!");
         goto Error;
@@ -305,4 +304,9 @@ void HandleError(cudaError_t err, const char *file, int line) {
                 file, line );
         exit( EXIT_FAILURE );
     }
+}
+
+double fRand(double fMin, double fMax) {
+    double f = (double)rand() / RAND_MAX;
+    return fMin + f * (fMax - fMin);
 }
