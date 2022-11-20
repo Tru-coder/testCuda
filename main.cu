@@ -22,11 +22,11 @@ int main() {
     cudaCheckAndPrintProperties();
 
     printf("Array size: %d", ARRAY_SIZE);
-    const int BLOCKS = (!ARRAY_SIZE % 1024) ? ARRAY_SIZE / 1024 : ARRAY_SIZE / 1024 + 1;
+    const int BLOCKS = ARRAY_SIZE / 1024 + 1;
 
 
-    const int THREADS_PER_BLOCK = (!ARRAY_SIZE % BLOCKS) ? 1024 : ARRAY_SIZE / BLOCKS +
-                                                                  ceil(double(ARRAY_SIZE % BLOCKS) / BLOCKS);
+    const int THREADS_PER_BLOCK = ARRAY_SIZE / BLOCKS +
+                                  ceil(double(ARRAY_SIZE % BLOCKS) / BLOCKS);
 
     printf("\nAmount of BLOCKS: %d",  BLOCKS);
     printf("\nTHREADS_PER_BLOCK: %d",  THREADS_PER_BLOCK);
@@ -44,11 +44,7 @@ int main() {
     }
 
     // Пареллельное сложения на GPU
-    if (addWithCuda(c, a, b, BLOCKS, THREADS_PER_BLOCK) != cudaSuccess) {
-        fprintf(stderr, "addWithCuda failed!");
-        exit( EXIT_FAILURE );
-    }
-
+    HANDLE_ERROR(addWithCuda(c, a, b, BLOCKS, THREADS_PER_BLOCK));
 
     for (int i = 0; i < 3; ++i){
         printf("\n%d: %f + %f = %f", i, a[i], b[i], c[i]);
@@ -59,10 +55,7 @@ int main() {
 
     // cudaDeviceReset must be called before exiting in order for profiling and
     // tracing tools such as Nsight and Visual Profiler to show complete traces.
-    if (cudaDeviceReset() != cudaSuccess) {
-        fprintf(stderr, "cudaDeviceReset failed!");
-        exit( EXIT_FAILURE );
-    }
+    HANDLE_ERROR(cudaDeviceReset());
 
     free(a);
     free(b);
@@ -123,9 +116,9 @@ void cudaCheckAndPrintProperties(){
         HANDLE_ERROR(cudaGetDeviceProperties(&prop, i));
         cout << "Device name: " << prop.name << endl;
         cout << "Warp size in threads: " << prop.warpSize << endl;
-        cout << "Shared memory available per block in bytes: " << prop.sharedMemPerBlock  / 1024.0 / 1024.0 << " MB" << endl;
         cout << "Total Memory: " << prop.totalGlobalMem / 1024.0 / 1024.0 << " MB" << endl;
         cout << "Max Threads per Block: " << prop.maxThreadsPerBlock << endl;
+        cout << "Number of multiprocessors on device: " << prop.multiProcessorCount << endl;
         cout << "Maximum size of each dimension of a grid: " <<  prop.maxGridSize[0] << " | "
                                                              <<  prop.maxGridSize[1] << " | "
                                                              <<  prop.maxGridSize[2] << endl;
@@ -143,138 +136,100 @@ void cudaCheckAndPrintProperties(){
 //__global__ — выполняется на GPU, вызывается с CPU.
 __global__ void addKernel(double *c, const double *a, const double *b)
 {
+  /// Каждому потоку, выполняющему ядро,
+  /// присваивается уникальный идентификатор блока
+  /// и идентификатор потока, который доступен в ядре через
+  /// встроенную переменную blockIdx.x и threadIdx,x.
+  /// Мы используем этот индекс, чтобы определить,
+  /// какие пары чисел мы хотим добавить в ядро.
+
+    // blockIdx.x is the index of the block.
+    // Each block has blockDim.x threads.
+    // threadIdx.x is the index of the thead.
+    // Each thread can perform 1 addition.
+
+
     // Индекс обсчитываемых компонент вектора с учетом смещения от количества блоков
     int i = threadIdx.x + blockIdx.x * blockDim.x;
+
     if (i < ARRAY_SIZE)
         c[i] = a[i] + b[i];
 }
-
+// Computing
 cudaError_t addWithCuda(double* c, const double* a, const double* b, const int BLOCKS, const int THREADS_PER_BLOCK)
 {
     double* dev_a = nullptr;
     double* dev_b = nullptr;
     double* dev_c = nullptr;
     double allTime = 0;
-    cudaError_t cudaStatus;
 
     // Создание обработчиков событий
     cudaEvent_t start, stop;
     float gpuTime = 0.0f;
-    cudaStatus = cudaEventCreate(&start);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "Cannot create CUDA start event: %s\n",
-                cudaGetErrorString(cudaStatus));
-        goto Error;
-    }
-    cudaStatus = cudaEventCreate(&stop);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "Cannot create CUDA end event: %s\n",
-                cudaGetErrorString(cudaStatus));
-        goto Error;
-    }
+    HANDLE_ERROR(cudaEventCreate(&start));
+    HANDLE_ERROR(cudaEventCreate(&stop));
 
     // Инициализация девайса
-    cudaStatus = cudaSetDevice(0);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaSetDevice failed!");
-        goto Error;
-    }
+    HANDLE_ERROR(cudaSetDevice(0));
 
     // Выделения памяти на GPU
-    cudaStatus = cudaMalloc(&dev_c, ARRAY_SIZE * sizeof(double));
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMalloc failed!");
-        goto Error;
-    }
-
-    cudaStatus = cudaMalloc(&dev_a, ARRAY_SIZE * sizeof(double));
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMalloc failed!");
-        goto Error;
-    }
-
-    cudaStatus = cudaMalloc(&dev_b, ARRAY_SIZE * sizeof(double));
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMalloc failed!");
-        goto Error;
-    }
+    HANDLE_ERROR(cudaMalloc(&dev_c, ARRAY_SIZE * sizeof(double)));
+    HANDLE_ERROR(cudaMalloc(&dev_a, ARRAY_SIZE * sizeof(double)));
+    HANDLE_ERROR(cudaMalloc(&dev_b, ARRAY_SIZE * sizeof(double)));
 
     // Копирования входных векторов с хоста на девайс
-    cudaStatus = cudaMemcpy(dev_a, a, ARRAY_SIZE * sizeof(double), cudaMemcpyHostToDevice);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed!");
-        goto Error;
-    }
+    HANDLE_ERROR(cudaMemcpy(dev_a, a, ARRAY_SIZE * sizeof(double), cudaMemcpyHostToDevice));
+    HANDLE_ERROR(cudaMemcpy(dev_b, b, ARRAY_SIZE * sizeof(double), cudaMemcpyHostToDevice));
 
-    cudaStatus = cudaMemcpy(dev_b, b, ARRAY_SIZE * sizeof(double), cudaMemcpyHostToDevice);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed!");
-        goto Error;
-    }
-
-    for (int i = 0; i < 12; i++)
-    {
+    for (int i = 0; i < NORMAL_SPREAD; ++i){
         // Установка точки старта
-        cudaStatus = cudaEventRecord(start, 0);
-        if (cudaStatus != cudaSuccess) {
-            fprintf(stderr, "Cannot record CUDA start event: %s\n", cudaGetErrorString(cudaStatus));
-            goto Error;
-        }
+        HANDLE_ERROR(cudaEventRecord(start, nullptr));
+
+
 
         // Запуск функции ядра на GPU
         addKernel <<< BLOCKS, THREADS_PER_BLOCK >>> (dev_c, dev_a, dev_b);
 
         // Отлов ошибок запуска ядра
-        cudaStatus = cudaGetLastError();
-        if (cudaStatus != cudaSuccess) {
-            fprintf(stderr, "addKernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
-            goto Error;
-        }
+        HANDLE_ERROR(cudaGetLastError());
 
         // Установка точки окончания
-        cudaStatus = cudaEventRecord(stop, 0);
-        if (cudaStatus != cudaSuccess)
-        {
-            fprintf(stderr, "Cannot record CUDA end event: %s\n", cudaGetErrorString(cudaStatus));
-            goto Error;
-        }
+        HANDLE_ERROR(cudaEventRecord(stop, nullptr));
 
-        // Ожидание завершения обсчета функции ядра
-        // Отлов ошибок работы и завершения ядра
-        cudaStatus = cudaDeviceSynchronize();
-        if (cudaStatus != cudaSuccess) {
-            fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
-            goto Error;
-        }
+        /// у функций ядра при этом есть особенность – асинхронное исполнение,
+        /// то есть, если после вызова ядра начал работать следующий участок кода,
+        /// то это ещё не значит, что GPU выполнил расчеты.
+        /// Для завершения работы заданной функции ядра необходимо использовать
+        /// средства синхронизации, например event’ы. Поэтому,
+        /// перед копированием результатов на хост выполняем синхронизацию нитей GPU
+        /// через event
+
+
+        //Хендл event'а
+        cudaEvent_t syncEvent;
+
+        HANDLE_ERROR(cudaEventCreate(&syncEvent));    //Создаем event
+        HANDLE_ERROR(cudaEventRecord(syncEvent, nullptr));  //Записываем event
+        HANDLE_ERROR(cudaEventSynchronize(syncEvent));  //Синхронизируем event
 
         // Расчет времени
-        cudaStatus = cudaEventElapsedTime(&gpuTime, start, stop);
-        if (cudaStatus != cudaSuccess)
-        {
-            fprintf(stderr, "Cannot record CUDA time event: %s\n", cudaGetErrorString(cudaStatus));
-            goto Error;
-        }
+        HANDLE_ERROR(cudaEventElapsedTime(&gpuTime, start, stop));
         printf("\nTime: %.20f", gpuTime / 1000);
         allTime += gpuTime / 1000;
+
+
     }
     printf("\nAverage time: %.20f", allTime / 12);
 
     // Копирования выходного вектора с девайса на хост
-    cudaStatus = cudaMemcpy(c, dev_c, ARRAY_SIZE * sizeof(double), cudaMemcpyDeviceToHost);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed!");
-        goto Error;
-    }
+    HANDLE_ERROR(cudaMemcpy(c, dev_c, ARRAY_SIZE * sizeof(double), cudaMemcpyDeviceToHost));
 
-    // Возникла ошибка/конец программы
-    Error:
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-    cudaFree(dev_c);
-    cudaFree(dev_a);
-    cudaFree(dev_b);
+    // Освобождение памяти
+    HANDLE_ERROR(cudaFree(dev_c));
+    HANDLE_ERROR(cudaFree(dev_a));
+    HANDLE_ERROR(cudaFree(dev_b));
 
-    return cudaStatus;
+    return cudaSuccess;
 }
 
 
