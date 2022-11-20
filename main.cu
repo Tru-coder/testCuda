@@ -22,14 +22,15 @@ int main() {
     cudaCheckAndPrintProperties();
 
     printf("Array size: %d", ARRAY_SIZE);
-    const int BLOCKS = ARRAY_SIZE / 1024 + 1;
 
 
-    const int THREADS_PER_BLOCK = ARRAY_SIZE / BLOCKS +
-                                  ceil(double(ARRAY_SIZE % BLOCKS) / BLOCKS);
 
-    printf("\nAmount of BLOCKS: %d",  BLOCKS);
-    printf("\nTHREADS_PER_BLOCK: %d",  THREADS_PER_BLOCK);
+    // gridDim - Количество ядер
+    const int GRID_DIM[]{4096, 2048, 4096, 2048, 4096, 2048};
+    // blockDim - Количество потоков в ядре
+    const int BLOCK_DIM[]{1024, 1024, 256, 256, 64, 64};
+
+
 
     auto * a = (double *)calloc(ARRAY_SIZE, sizeof(double ));
     auto * b = (double *)calloc(ARRAY_SIZE, sizeof(double ));
@@ -44,13 +45,15 @@ int main() {
     }
 
     // Пареллельное сложения на GPU
-    HANDLE_ERROR(addWithCuda(c, a, b, BLOCKS, THREADS_PER_BLOCK));
+    for (int i = 0; i < 6; ++i){
+        HANDLE_ERROR(addWithCuda(c, a, b, GRID_DIM[i], BLOCK_DIM[i]));
+        for (int i = 0; i < 3; ++i){
+            printf("\n%d: %f + %f = %f", i, a[i], b[i], c[i]);
+        }
+        for (int i = ARRAY_SIZE - 3; i < ARRAY_SIZE; ++i){
+            printf("\n%d: %f + %f = %f", i, a[i], b[i], c[i]);
+        }
 
-    for (int i = 0; i < 3; ++i){
-        printf("\n%d: %f + %f = %f", i, a[i], b[i], c[i]);
-    }
-    for (int i = ARRAY_SIZE - 3; i < ARRAY_SIZE; ++i){
-        printf("\n%d: %f + %f = %f", i, a[i], b[i], c[i]);
     }
 
     // cudaDeviceReset must be called before exiting in order for profiling and
@@ -136,7 +139,7 @@ void cudaCheckAndPrintProperties(){
 //__global__ — выполняется на GPU, вызывается с CPU.
 __global__ void addKernel(double *c, const double *a, const double *b)
 {
-  /// Каждому потоку, выполняющему ядро,
+  /// Каждому потоку, выполняющему addKernel,
   /// присваивается уникальный идентификатор блока
   /// и идентификатор потока, который доступен в ядре через
   /// встроенную переменную blockIdx.x и threadIdx,x.
@@ -163,6 +166,9 @@ cudaError_t addWithCuda(double* c, const double* a, const double* b, const int B
     double* dev_c = nullptr;
     double allTime = 0;
 
+    printf("\nAmount of BLOCKS: %d",  BLOCKS);
+    printf("\nTHREADS_PER_BLOCK: %d",  THREADS_PER_BLOCK);
+
     // Создание обработчиков событий
     cudaEvent_t start, stop;
     float gpuTime = 0.0f;
@@ -184,7 +190,6 @@ cudaError_t addWithCuda(double* c, const double* a, const double* b, const int B
     for (int i = 0; i < NORMAL_SPREAD; ++i){
         // Установка точки старта
         HANDLE_ERROR(cudaEventRecord(start, nullptr));
-
 
 
         // Запуск функции ядра на GPU
