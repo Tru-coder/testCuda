@@ -3,6 +3,7 @@
 #include <cmath>
 #include <ctime>
 
+
 using namespace std;
 
 static void HandleError( cudaError_t err,
@@ -11,7 +12,7 @@ static void HandleError( cudaError_t err,
 #define HANDLE_ERROR( err ) (HandleError( err, __FILE__, __LINE__ ))
 
 void cudaCheckAndPrintProperties();
-cudaError_t addWithCuda(double* c, const double* a, const double* b, const int BLOCKS, const int THREADS_PER_BLOCK);
+cudaError_t addWithCuda(double* c, const double* a, const double* b, int BLOCKS, int THREADS_PER_BLOCK);
 void printTest();
 double fRand(double fMin, double fMax);
 
@@ -22,11 +23,6 @@ int main() {
     cudaCheckAndPrintProperties();
 
     printf("Array size: %d", ARRAY_SIZE);
-
-
-
-    // gridDim - Количество ядер
-    const int GRID_DIM[]{4096, 2048, 4096, 2048, 4096, 2048};
     // blockDim - Количество потоков в ядре
     const int BLOCK_DIM[]{1024, 1024, 256, 256, 64, 64};
 
@@ -156,9 +152,8 @@ __global__ void addKernel(double *c, const double *a, const double *b)
 
 
     // Индекс обсчитываемых компонент вектора с учетом смещения от количества блоков
-    int i = threadIdx.x + blockIdx.x * blockDim.x;
-
-    if (i < ARRAY_SIZE)
+    int i = blockIdx.x;
+    for (; i < ARRAY_SIZE; i += gridDim.x)
         c[i] = a[i] + b[i];
 }
 // Computing
